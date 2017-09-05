@@ -9,9 +9,14 @@
 
 #define NULL 0
 
-/* Queue Implementation Invariants
+/* Queue Implementation Invariants:
+ *
  * Head always points to the least recent node or to Last
+ *
  * Last always points to the most recent node or to Head
+ *
+ * Head will point to Last and Last will Point to Head if and only if the
+ * queue is empty
  */
 
 struct {
@@ -43,6 +48,10 @@ static void enqueue(struct proc *p) {
 };
 
 static struct proc* dequeue() {
+    /* The next part would still work if this guard was removed,
+     * but semantics of the function would change where you would have to
+     * consider the address of ptable.head as empty. An early guard also
+     * avoids redundant pointer-shuffling */
     if (empty()) return NULL;
 
     struct proc* p = ptable.head;
@@ -59,7 +68,10 @@ pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 
-  /* Some cleverness to automatically cover an edge case */
+  /* Use some cleverness to automatically cover an edge case.
+   * I placed the 'next' pointer in the front of the proc struct so the head
+   * and tail pointers can masquerade as actual proc structs. This allows
+   * special pointer checking to only have to exist in the dequeue. */
   ptable.last = (struct proc*) &ptable.head;
   ptable.head = (struct proc*) &ptable.last;
 }
