@@ -7,9 +7,18 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define NULL 0
+/* Queue Implementation Invariants
+ * Head always points to the least recent node or to Last
+ * Last always points to the most recent node or to Head
+ * */
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+
+  struct proc* head;
+  struct proc* last;
 } ptable;
 
 static struct proc *initproc;
@@ -20,10 +29,30 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+static void enqueue(struct proc *p) {
+    ptable.last->next = p;
+    ptable.last = p;
+    p->next = (struct proc*) &ptable.last;
+};
+
+static struct proc* dequeue() {
+    if (ptable.head == ptable.last) return 0;
+
+    struct proc* p = ptable.head;
+    ptable.head = p->next;
+    if (ptable.head == ptable.last) ptable.last = (struct proc*) &ptable.head;
+
+    return p;
+}
+
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+
+  /* Some cleverness to automatically cover an edge case */
+  ptable.last = (struct proc*) &ptable.head;
+  ptable.head = (struct proc*) &ptable.last;
 }
 
 // Must be called with interrupts disabled
