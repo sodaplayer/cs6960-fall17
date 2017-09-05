@@ -33,6 +33,8 @@ static void enqueue(struct proc *p) {
     ptable.last->next = p;
     ptable.last = p;
     p->next = (struct proc*) &ptable.last;
+
+    p->state = RUNNABLE;
 };
 
 static struct proc* dequeue() {
@@ -177,7 +179,7 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
-  p->state = RUNNABLE;
+  enqueue(p);
 
   release(&ptable.lock);
 }
@@ -243,7 +245,7 @@ fork(void)
 
   acquire(&ptable.lock);
 
-  np->state = RUNNABLE;
+  enqueue(np);
 
   release(&ptable.lock);
 
@@ -361,10 +363,7 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-
+    while ((p = dequeue())) {
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -415,7 +414,7 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  enqueue(myproc());
   sched();
   release(&ptable.lock);
 }
@@ -489,8 +488,9 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
+    if(p->state == SLEEPING && p->chan == chan) {
+        enqueue(p);
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -516,7 +516,7 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+          enqueue(p);
       release(&ptable.lock);
       return 0;
     }
