@@ -8,10 +8,11 @@
 #include "spinlock.h"
 
 #define NULL 0
+
 /* Queue Implementation Invariants
  * Head always points to the least recent node or to Last
  * Last always points to the most recent node or to Head
- * */
+ */
 
 struct {
   struct spinlock lock;
@@ -29,6 +30,10 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+static inline int empty() {
+    return ptable.head == (struct proc*) &ptable.last;
+}
+
 static void enqueue(struct proc *p) {
     ptable.last->next = p;
     ptable.last = p;
@@ -38,11 +43,13 @@ static void enqueue(struct proc *p) {
 };
 
 static struct proc* dequeue() {
-    if (ptable.head == ptable.last) return 0;
+    if (empty()) return NULL;
 
     struct proc* p = ptable.head;
     ptable.head = p->next;
-    if (ptable.head == ptable.last) ptable.last = (struct proc*) &ptable.head;
+
+    /* We have to check if we need to clean up our Last pointer. */
+    if (empty()) ptable.last = (struct proc*) &ptable.head;
 
     return p;
 }
